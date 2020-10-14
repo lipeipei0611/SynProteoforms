@@ -1,0 +1,68 @@
+
+data_aggregationPropensity <- read.table("data_aggregationPropensity.txt", header=T, sep="\t")
+head(data_aggregationPropensity)
+
+
+library("ggplot2")
+pdf("aggregationPropensity_Age_boxplot.pdf", width = 8, height = 6)
+ggplot(data_aggregationPropensity, aes(x = Age, y = x, color= Tissue)) +
+        geom_point(size=2) +  geom_smooth(method=lm) + 
+        scale_y_continuous(name = "Aggregation propensity", limits = c(3.5, 7)) +
+        scale_x_continuous(name = "Age", limits = c(53, 92)) +
+        theme(axis.line = element_line(colour = "black"), panel.background = element_blank(), plot.title = element_text(size = 25, family="Helvetica", face = "plain"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+              text = element_text(size = 25, family="Helvetica", face = "plain"),
+              axis.title = element_text(size = 25, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.x=element_text(size = 25, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.y=element_text(size = 25, colour = "black", family="Helvetica", face = "plain"),
+              legend.position = "none") + scale_color_manual(values=c("#1F78B4", "#34A02C")) 
+
+dev.off()
+
+
+
+
+data_aggregationPropensity <- read.table("data_aggregationPropensity.txt", header=T, sep="\t")
+head(data_aggregationPropensity)
+summary(data_aggregationPropensity)
+
+###
+library("limma")
+
+
+data <- data_aggregationPropensity$x
+design <- model.matrix(~ Tissue*Age + Group_new, data = data_aggregationPropensity)
+fit <- lmFit(data, design, method="robust")
+
+
+Age_min <- 53.00
+Age_max <- 92.00
+
+Appendix_Agemax <- c(1, 0, Age_max, 1, 0*Age_max)
+Appendix_Agemin <- c(1, 0, Age_min, 1, 0*Age_min)
+
+SN_Agemax <- c(1, 1, Age_max, 1, 1*Age_max)
+SN_Agemin <- c(1, 1, Age_min, 1, 1*Age_min)
+
+Appendix_Age <- Appendix_Agemax - Appendix_Agemin
+SN_Age <- SN_Agemax - SN_Agemin
+Appendix_SN_Age <- Appendix_Age-SN_Age
+contrast.matrix <- cbind(Appendix_Age, SN_Age, Appendix_SN_Age)
+rownames(contrast.matrix) <- colnames(design)
+
+
+fit_Contrast <- contrasts.fit(fit, contrast.matrix)
+fit_Contrast <- eBayes(fit_Contrast)
+
+fit_Contrast_Appendix_Age <- topTable(fit_Contrast, coef=1, number=Inf, sort.by = "p")
+      logFC  AveExpr       t    P.Value  adj.P.Val         B
+1 0.6321772 6.161003 2.02494 0.04686127 0.04686127 -3.902008
+
+fit_Contrast_SN_Age <- topTable(fit_Contrast, coef=2, number=Inf, sort.by = "p")
+       logFC  AveExpr          t   P.Value adj.P.Val         B
+1 -0.4377829 6.161003 -0.7895604 0.4325699 0.4325699 -4.664899
+
+fit_Contrast_AppendixSN_Age <- topTable(fit_Contrast, coef=3, number=Inf, sort.by = "p")
+    logFC  AveExpr        t   P.Value adj.P.Val         B
+1 1.06996 6.161003 1.701499 0.0934861 0.0934861 -4.309281
