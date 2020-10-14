@@ -1,0 +1,209 @@
+key <- read.table("key.txt", header=T, sep="\t", check.names=F)
+head(key)
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t", check.names=F)
+head(pfmap)
+pfmap_0Nox <- subset(pfmap, pfmap$Nox == 0 | pfmap$ID == "Total")
+
+data <- read.table("data.txt", header=T, sep="\t", check.names=F)
+head(data)
+data_0Nox <- data[, as.character(pfmap_0Nox$ID)]
+
+key$Group_new <- ifelse(key$Group == 0, c("Control"), c("PD"))
+
+data <- data.frame(key, data_0Nox)
+
+data_All <- data
+
+
+
+
+b <- matrix(data=NA, nrow=ncol(data_All[, 11:ncol(data_All)]), ncol=1)
+
+for(i in 1:ncol(data_All[, 11:ncol(data_All)]))
+{
+	b[i, 1] <- mean(is.na(data_All[, i+10])) <= 0.5
+}
+
+b_data <- data.frame(colnames((data_All[, 11:ncol(data_All)])), b)
+b_yes <- subset(b_data, b_data$b == "TRUE")
+
+data_All <- data_All[, c(colnames(data_All[, 1:10]), as.character(b_yes[, 1]))]
+
+data_All <- data.frame(data_All[, 1:10], t(scale(log10(t(data_All[, 11:ncol(data_All)])))))
+
+### average replicates
+PatientIDList <- unique(data_All$PatientID)
+
+data_All_new <- data.frame(data_All[1, 4], data_All[1, 7:10], data_All[1, 11:ncol(data_All)] )
+colnames(data_All_new) <- c("PatientID", colnames(data_All[1, 7:10]), colnames(data_All[1, 11:ncol(data_All)]))
+for(i in 1:length(PatientIDList))
+{
+	
+	sub <- subset(data_All, data_All$PatientID == as.character(PatientIDList[i]))
+	proAve <- colMeans(sub[, 11:ncol(sub)], na.rm=T)
+
+	tmp <- data.frame(sub[1, 4], sub[1, 7:10], t(proAve) )
+	colnames(tmp) <- c("PatientID", colnames(data_All[1, 7:10]), colnames(data_All[1, 11:ncol(data_All)]))
+	data_All_new <- rbind(data_All_new, tmp)
+}
+
+data_All_new <- data_All_new[2:nrow(data_All_new), ]
+
+data_All <- data_All_new
+write.table(data_All, "data_All.txt", quote=F, sep="\t", row.names=F)
+
+
+
+library("cluster")
+library("factoextra")
+library("magrittr")
+
+
+data_All <- read.table("data_All.txt", header=T, sep="\t")
+head(data_All)
+
+
+### imputation
+library(mice)
+md.pattern(data_All)
+
+
+nNA <- matrix(data=NA, nrow=ncol(data_All[, 6:ncol(data_All)]), ncol=1)
+
+for(i in 1:ncol(data_All[, 6:ncol(data_All)]))
+{
+	nNA[i, 1] <- mean(is.na(data_All[, i+5]))
+}
+nNA
+
+
+dat <- data_All[, 6:(ncol(data_All)-1)]
+imputed_Data <- mice(dat, m=5, maxit = 50, method = 'pmm', seed = 500)
+completeData <- complete(imputed_Data,2)
+
+dat <- as.matrix(completeData)
+
+
+
+
+###
+dat <- t(dat)
+
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t")
+head(pfmap)
+pName <- matrix(data=NA, ncol=1, nrow=nrow(dat))
+for(i in 1:nrow(dat))
+{
+	sub <- subset(pfmap, pfmap$ID == rownames(dat)[i])
+	
+	pName[i, 1] <- paste(sub[1, 1], sub[1, 2], sep="")
+}
+
+rownames(dat) <- pName[, 1]
+
+
+
+### kmeans
+res.dist <- get_dist(dat, stand = TRUE, method = "pearson")
+
+fviz_dist(res.dist, 
+   gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+
+pdf("All_kmeans_n.pdf", width = 6, height = 6)
+
+fviz_nbclust(dat, kmeans, method = "gap_stat")
+dev.off()
+# 1
+set.seed(123)
+
+km.res <- kmeans(dat, 2, nstart = 25)
+# Visualize
+library("factoextra")
+
+pdf("All_kmeans.pdf", width = 6, height = 6)
+fviz_cluster(km.res, data = dat,
+             ellipse.type = "convex",
+             palette = "jco",
+             ggtheme = theme_minimal())
+dev.off()
+
+
+### DBScan
+library("fpc")
+set.seed(123)
+db <- fpc::dbscan(dat, eps = 0.15, MinPts = 3)
+
+
+library("factoextra")
+fviz_cluster(db, data = dat, stand = FALSE,
+             ellipse = FALSE, show.clust.cent = FALSE,
+             geom = "point",palette = "jco", ggtheme = theme_classic())
+             
+
+
+# hierarchical clustering
+res.hc <- dat %>% # Scale the data
+  dist(method = "euclidean") %>% # Compute dissimilarity matrix
+  hclust(method = "ward.D2")               
+
+pdf("All_hierarchical_use.pdf", width = 6, height = 6)
+fviz_dend(res.hc, k = 2, # Cut in four groups
+          cex = 0.5, # label size
+          k_colors = c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07"),
+          color_labels_by_k = TRUE, # color labels by groups
+          rect = TRUE # Add rectangle around groups
+          )
+dev.off()
+
+## ehanced
+# Enhanced hierarchical clustering, cut in 3 groups
+res.hc <- dat %>%
+  eclust("hclust", k = 2, graph = FALSE)
+
+# Visualize with factoextra
+pdf("All_Enhanced_hierarchical_use.pdf", width = 12, height = 5)
+fviz_dend(res.hc, palette = "jco", cex = 1.5, rect = TRUE, rect_fill = TRUE,   rect_border = "jco", labels_track_height = 1.8, color_labels_by_k = TRUE, ggtheme =  theme_void(), show_labels = TRUE)
+     
+dev.off()    
+     
+     
+### fuzzy clustering
+
+library(cluster)
+res.fanny <- fanny(dat, 3)  # Compute fuzzy clustering with k = 2
+
+library(factoextra)
+
+pdf("All_fuzzy.pdf", width = 6, height = 6)
+fviz_cluster(res.fanny, ellipse.type = "norm", repel = TRUE,
+             palette = "jco", ggtheme = theme_minimal(),
+             legend = "right")
+
+dev.off()
+
+
+### model-based--not working
+library("mclust")
+
+mc <- Mclust(dat) 
+
+library(factoextra)
+# BIC values used for choosing the number of clusters
+fviz_mclust(mc, "BIC", palette = "jco")
+# Classification: plot showing the clustering
+fviz_mclust(mc, "classification", geom = "point", 
+            pointsize = 1.5, palette = "jco")
+# Classification uncertainty
+fviz_mclust(mc, "uncertainty", palette = "jco")
+
+
+         
+         
+         
+         
+         
+         pdf("All_Enhanced_hierarchical_use.pdf", width = 12, height = 5)
+fviz_dend(res.hc, palette = "jco", cex = 1.5, rect = TRUE, rect_fill = TRUE, rect_border = "jco", labels_track_height = 6, color_labels_by_k = TRUE, ggtheme =  theme_void(), show_labels = TRUE)
+dev.off()
