@@ -1,0 +1,364 @@
+key <- read.table("key.txt", header=T, sep="\t", check.names=F)
+head(key)
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t", check.names=F)
+head(pfmap)
+pfmap_0Nox <- subset(pfmap, pfmap$Nox == 0 | pfmap$ID == "Total")
+
+data <- read.table("data.txt", header=T, sep="\t", check.names=F)
+head(data)
+data_0Nox <- data[, as.character(pfmap_0Nox$ID)]
+
+key$Group_new <- ifelse(key$Group == 0, c("Control"), c("PD"))
+
+data <- data.frame(key, data_0Nox)
+
+data_Appendix <- subset(data, data$Tissue == "Appendix")
+
+
+
+b <- matrix(data=NA, nrow=ncol(data_Appendix[, 11:ncol(data_Appendix)]), ncol=1)
+
+for(i in 1:ncol(data_Appendix[, 11:ncol(data_Appendix)]))
+{
+	b[i, 1] <- mean(is.na(data_Appendix[, i+10])) <= 0.5
+}
+
+b_data <- data.frame(colnames((data_Appendix[, 11:ncol(data_Appendix)])), b)
+b_yes <- subset(b_data, b_data$b == "TRUE")
+
+data_Appendix <- data_Appendix[, c(colnames(data_Appendix[, 1:10]), as.character(b_yes[, 1]))]
+
+
+data_Appendix <- data.frame(data_Appendix[, 1:10], t(scale(log10(t(data_Appendix[, 11:ncol(data_Appendix)])))))
+
+### average replicates
+PatientIDList <- unique(data_Appendix$PatientID)
+
+data_Appendix_new <- data.frame(data_Appendix[1, 4], data_Appendix[1, 7:10], data_Appendix[1, 11:ncol(data_Appendix)] )
+colnames(data_Appendix_new) <- c("PatientID", colnames(data_Appendix[1, 7:10]), colnames(data_Appendix[1, 11:ncol(data_Appendix)]))
+for(i in 1:length(PatientIDList))
+{
+	
+	sub <- subset(data_Appendix, data_Appendix$PatientID == as.character(PatientIDList[i]))
+	proAve <- colMeans(sub[, 11:ncol(sub)], na.rm=T)
+
+	tmp <- data.frame(sub[1, 4], sub[1, 7:10], t(proAve) )
+	colnames(tmp) <- c("PatientID", colnames(data_Appendix[1, 7:10]), colnames(data_Appendix[1, 11:ncol(data_Appendix)]))
+	data_Appendix_new <- rbind(data_Appendix_new, tmp)
+}
+
+data_Appendix_new <- data_Appendix_new[2:nrow(data_Appendix_new), ]
+
+data_Appendix <- data_Appendix_new
+write.table(data_Appendix, "data_Appendix.txt", quote=F, sep="\t", row.names=F)
+
+
+
+library(caret)
+library(RANN)
+library(glmnet)
+library(doParallel)
+library(data.table)
+
+data_Appendix <- read.table("data_Appendix.txt", header=T, sep="\t")
+head(data_Appendix)
+
+cname <- c("Group", colnames(data_Appendix[, 6:ncol(data_Appendix)]))
+data_Appendix <- data.table(data_Appendix$Group_new, data_Appendix[, 6:ncol(data_Appendix)])
+colnames(data_Appendix) <- cname
+
+head(data_Appendix)
+modeldata <- data_Appendix
+###
+preProcValues <- preProcess(modeldata, method = c("knnImpute"), k=5)
+modeldata <- predict(preProcValues, modeldata)
+
+
+myControl <- trainControl(
+  method = "repeatedcv",
+  number = 10,
+  repeats = 3,
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = FALSE,
+  savePredictions = TRUE
+)
+myPreprocess <- c("nzv", "center", "scale")
+
+res <-
+	train(
+	     Group ~ ., data = modeldata,
+	     method = 'glmnet',
+	     metric = "ROC",
+	     tuneLength = 20,
+	     trControl = myControl,
+	     preProcess = myPreprocess
+	     )	
+	     
+        alpha    lambda
+136 0.4315789 0.2496346	 
+
+pdf("Appendix_res.pdf", width = 8, height = 5)       
+plot(res)
+dev.off()
+write.table(varImp(res)[1], "varImp_res_Appendix.txt", quote=F)
+
+pdf("Appendix_varImp.pdf", width = 8, height = 5)   
+plot(varImp(res))
+dev.off()
+
+Appendix_varImp <- data.frame(varImp(res)[1])
+Appendix_varImp$PID <- rownames(Appendix_varImp)
+
+Appendix_varImp <- Appendix_varImp[order(Appendix_varImp$Overall),]
+
+
+write.table(Appendix_varImp, "Appendix_varImp.txt", quote=F, row.names=T, sep="\t")
+
+
+Appendix_varImp$PID <- factor(Appendix_varImp$PID, levels=as.character(Appendix_varImp$PID))
+Appendix_varImp <- subset(Appendix_varImp, Appendix_varImp$PID != "Total")
+
+
+pfmap <- read.table("pfmap copy.txt", header=T, sep="\t")
+head(pfmap)
+pfmap$name <- paste(pfmap$Ac, pfmap$Length, sep=" ")
+rownames(pfmap) <- pfmap$ID
+
+pfmap_Appendix_varImp <- pfmap[rownames(Appendix_varImp), ]
+Appendix_varImp$name <- pfmap_Appendix_varImp$name
+
+
+
+library("ggplot2")
+library(stringr)
+
+pdf("Appendix_varImp_barplot.pdf", width = 6, height = 4)
+
+p10 <- ggplot(Appendix_varImp, aes(x = PID, y = Overall)) + geom_bar(stat="identity", color="white", fill=c("#C04B57")) +
+        theme(axis.line = element_line(colour = "black"), panel.background = element_blank(), plot.title = element_text(size = 20, family="Helvetica", face = "plain"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+              text = element_text(size = 15),
+              axis.title = element_text(),
+              axis.text.x=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.y=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              legend.position = "none") + labs(title=" ") + ylab("Importance") + xlab("") + scale_y_continuous(expand = c(0, 0), limits=c(0, 103)) + scale_x_discrete(name = " ", labels=str_trim(c(Appendix_varImp$name)))
+p10 + coord_flip()
+
+dev.off()
+
+
+
+
+library(ggplot2)
+library(plotROC)	     
+	     
+alpha = 0.4315789 
+lambda = 0.2496346
+
+data_roc <- data.frame(res$pred)
+
+data_roc <- subset(data_roc, data_roc$alpha > 0.43 & data_roc$alpha < 0.44 & data_roc$lambda > 0.24 & data_roc$lambda < 0.25)
+
+write.table(data_roc, "data_roc_App.txt", quote=F, row.names=F, sep="\t")
+
+pdf("Appendix_roc.pdf", width = 5, height = 4)     
+ggplot(data= data_roc, aes(m = PD, d = obs)) + geom_roc(hjust = -0.4, vjust = 1.5) +
+        theme(axis.line = element_line(colour = "black"), panel.background = element_blank(), plot.title = element_text(size = 20, family="Helvetica", face = "plain"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+              text = element_text(size = 15),
+              axis.title = element_text(),
+              axis.text.x=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.y=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              legend.position = "none") + labs(title=" ")  + ylab("True positive fraction") + xlab("False positive fraction") + scale_y_continuous(expand = c(0, 0), limits=c(0, 1.05)) + scale_x_continuous(expand = c(0, 0), limits=c(0, 1.05)) + coord_equal()
+dev.off()
+
+
+
+
+
+
+
+
+
+
+### SN
+key <- read.table("key.txt", header=T, sep="\t", check.names=F)
+head(key)
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t", check.names=F)
+head(pfmap)
+pfmap_0Nox <- subset(pfmap, pfmap$Nox == 0 | pfmap$ID == "Total")
+
+data <- read.table("data.txt", header=T, sep="\t", check.names=F)
+head(data)
+data_0Nox <- data[, as.character(pfmap_0Nox$ID)]
+
+key$Group_new <- ifelse(key$Group == 0, c("Control"), c("PD"))
+
+data <- data.frame(key, data_0Nox)
+
+data_SN <- subset(data, data$Tissue == "SN")
+
+
+
+b <- matrix(data=NA, nrow=ncol(data_SN[, 11:ncol(data_SN)]), ncol=1)
+
+for(i in 1:ncol(data_SN[, 11:ncol(data_SN)]))
+{
+	b[i, 1] <- mean(is.na(data_SN[, i+10])) <= 0.5
+}
+
+b_data <- data.frame(colnames((data_SN[, 11:ncol(data_SN)])), b)
+b_yes <- subset(b_data, b_data$b == "TRUE")
+
+data_SN <- data_SN[, c(colnames(data_SN[, 1:10]), as.character(b_yes[, 1]))]
+
+
+data_SN <- data.frame(data_SN[, 1:10], t(scale(log10(t(data_SN[, 11:ncol(data_SN)])))))
+
+### average replicates
+PatientIDList <- unique(data_SN$PatientID)
+
+data_SN_new <- data.frame(data_SN[1, 4], data_SN[1, 7:10], data_SN[1, 11:ncol(data_SN)] )
+colnames(data_SN_new) <- c("PatientID", colnames(data_SN[1, 7:10]), colnames(data_SN[1, 11:ncol(data_SN)]))
+for(i in 1:length(PatientIDList))
+{
+	
+	sub <- subset(data_SN, data_SN$PatientID == as.character(PatientIDList[i]))
+	proAve <- colMeans(sub[, 11:ncol(sub)], na.rm=T)
+
+	tmp <- data.frame(sub[1, 4], sub[1, 7:10], t(proAve) )
+	colnames(tmp) <- c("PatientID", colnames(data_SN[1, 7:10]), colnames(data_SN[1, 11:ncol(data_SN)]))
+	data_SN_new <- rbind(data_SN_new, tmp)
+}
+
+data_SN_new <- data_SN_new[2:nrow(data_SN_new), ]
+
+data_SN <- data_SN_new
+write.table(data_SN, "data_SN.txt", quote=F, sep="\t", row.names=F)
+
+
+library(caret)
+library(RANN)
+library(glmnet)
+library(doParallel)
+library(data.table)
+
+data_SN <- read.table("data_SN.txt", header=T, sep="\t")
+head(data_SN)
+
+cname <- c("Group", colnames(data_SN[, 6:ncol(data_SN)]))
+data_SN <- data.table(data_SN$Group_new, data_SN[, 6:ncol(data_SN)])
+colnames(data_SN) <- cname
+
+head(data_SN)
+modeldata <- data_SN
+###
+preProcValues <- preProcess(modeldata, method = c("knnImpute"), k=5)
+modeldata <- predict(preProcValues, modeldata)
+
+
+myControl <- trainControl(
+  method = "repeatedcv",
+  number = 10,
+  repeats = 3,
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = FALSE,
+  savePredictions = TRUE
+)
+myPreprocess <- c("nzv", "center", "scale")
+
+res <-
+	train(
+	     Group ~ ., data = modeldata,
+	     method = 'glmnet',
+	     metric = "ROC",
+	     tuneLength = 20,
+	     trControl = myControl,
+	     preProcess = myPreprocess
+	     )	
+	      
+
+        alpha    lambda
+136 0.6210526 0.3370796	 
+
+pdf("SN_res.pdf", width = 8, height = 5)       
+plot(res)
+dev.off()
+write.table(varImp(res)[1], "varImp_res_SN.txt", quote=F)
+
+
+
+SN_varImp <- data.frame(varImp(res)[1])
+SN_varImp$PID <- rownames(SN_varImp)
+
+SN_varImp <- SN_varImp[order(SN_varImp$Overall),]
+
+
+write.table(SN_varImp, "SN_varImp.txt", quote=F, row.names=T, sep="\t")
+
+
+SN_varImp$PID <- factor(SN_varImp$PID, levels=as.character(SN_varImp$PID))
+SN_varImp <- subset(SN_varImp, SN_varImp$PID != "Total")
+
+
+pfmap <- read.table("pfmap copy.txt", header=T, sep="\t")
+head(pfmap)
+pfmap$name <- paste(pfmap$Ac, pfmap$Length, sep=" ")
+rownames(pfmap) <- pfmap$ID
+
+pfmap_SN_varImp <- pfmap[rownames(SN_varImp), ]
+SN_varImp$name <- pfmap_SN_varImp$name
+
+
+
+library("ggplot2")
+library(stringr)
+
+pdf("SN_varImp_barplot.pdf", width = 6, height = 4)
+
+p10 <- ggplot(SN_varImp, aes(x = PID, y = Overall)) + geom_bar(stat="identity", color="white", fill=c("#C04B57")) +
+        theme(axis.line = element_line(colour = "black"), panel.background = element_blank(), plot.title = element_text(size = 20, family="Helvetica", face = "plain"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+              text = element_text(size = 15),
+              axis.title = element_text(),
+              axis.text.x=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.y=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              legend.position = "none") + labs(title=" ") + ylab("Importance") + xlab("") + scale_y_continuous(expand = c(0, 0), limits=c(0, 103)) + scale_x_discrete(name = " ", labels=str_trim(c(SN_varImp$name)))
+p10 + coord_flip()
+
+dev.off()
+
+
+
+
+library(ggplot2)
+library(plotROC)	     
+	     
+alpha = 0.6210526 
+lambda = 0.3370796
+
+data_roc <- data.frame(res$pred)
+
+data_roc <- subset(data_roc, data_roc$alpha > 0.62 & data_roc$alpha < 0.63 & data_roc$lambda > 0.33 & data_roc$lambda < 0.34)
+
+write.table(data_roc, "data_roc_SN.txt", quote=F, row.names=F, sep="\t")
+
+pdf("SN_roc.pdf", width = 5, height = 4)     
+ggplot(data= data_roc, aes(m = PD, d = obs)) + geom_roc(hjust = -0.4, vjust = 1.5) +
+        theme(axis.line = element_line(colour = "black"), panel.background = element_blank(), plot.title = element_text(size = 20, family="Helvetica", face = "plain"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+              text = element_text(size = 15),
+              axis.title = element_text(),
+              axis.text.x=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.y=element_text(size = 15, colour = "black", family="Helvetica", face = "plain"),
+              legend.position = "none") + labs(title=" ")  + ylab("True positive fraction") + xlab("False positive fraction") + scale_y_continuous(expand = c(0, 0), limits=c(0, 1.05)) + scale_x_continuous(expand = c(0, 0), limits=c(0, 1.05)) + coord_equal()
+dev.off()
+
