@@ -1,0 +1,162 @@
+aggregationPropensity <- read.csv("aggregationPropensity.csv")
+head(aggregationPropensity)
+aggregationPropensity_dat <- data.frame(aggregationPropensity[, 1], aggregationPropensity[, 4])
+colnames(aggregationPropensity_dat) <- c("ID", "Score")
+rownames(aggregationPropensity_dat) <- aggregationPropensity_dat$ID
+
+key <- read.table("key.txt", header=T, sep="\t", check.names=F)
+head(key)
+
+key$Group_new <- ifelse(key$Group == 0, c("Control"), c("PD"))
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t", check.names=F)
+head(pfmap)
+pfmap_0Nox <- subset(pfmap, pfmap$Nox == 0)
+
+data <- read.table("data.txt", header=T, sep="\t", check.names=F)
+head(data)
+
+data_0Nox <- as.matrix(t(data[, as.character(pfmap_0Nox$ID)]))
+
+totals <- colSums(data_0Nox, na.rm=TRUE)
+normDat <- t(t(data_0Nox) / totals)
+
+
+# Normalization is different now. We divide each sample by its total
+
+normDat[is.na(normDat)] <- 0
+
+aggregationPropensity_dat_sub <- aggregationPropensity_dat[rownames(normDat), ]
+
+x <- t(abs(as.matrix(aggregationPropensity_dat_sub$Score)))  %*% normDat
+x <- x[1,]
+
+### then average
+
+data_aggregationPropensity <- data.frame(key, x)
+
+
+### average replicates
+PatientIDList <- unique(data_aggregationPropensity$PatientID)
+
+data_aggregationPropensity_new <- data.frame(data_aggregationPropensity[1, 4], data_aggregationPropensity[1, 7:11] )
+
+colnames(data_aggregationPropensity_new) <- c("PatientID", colnames(data_aggregationPropensity[1, 7:11]) )
+for(i in 1:length(PatientIDList))
+{
+	
+	sub <- subset(data_aggregationPropensity, data_aggregationPropensity$PatientID == as.character(PatientIDList[i]))
+	proAve <- mean(sub$x)
+
+	tmp <- data.frame(sub[1, 4], sub[1, 7:10], proAve )
+	colnames(tmp) <- c("PatientID", colnames(data_aggregationPropensity[1, 7:11]) )
+	data_aggregationPropensity_new <- rbind(data_aggregationPropensity_new, tmp)
+}
+
+data_aggregationPropensity_new <- data_aggregationPropensity_new[2:nrow(data_aggregationPropensity_new), ]
+
+data_aggregationPropensity <- data_aggregationPropensity_new
+write.table(data_aggregationPropensity, "data_aggregationPropensity.txt", quote=F, sep="\t", row.names=F)
+
+
+
+data_aggregationPropensity  <- read.table("data_aggregationPropensity.txt", header=T, sep="\t")
+head(data_aggregationPropensity)
+###
+library("limma")
+data <- data_aggregationPropensity$x
+design <- model.matrix(~ Tissue + Group_new + Age, data = data_aggregationPropensity)
+
+fit <- lmFit(data, design, method="robust")
+fit <- eBayes(fit)
+
+fit$p.value
+#      (Intercept)     TissueSN Group_newPD         Age
+#[1,] 7.509915e-14 6.079237e-11   0.9509217 0.005152518
+
+
+      (Intercept)     TissueSN Group_newPD       Age
+[1,] 2.680595e-17 1.210406e-10   0.8991342 0.0790402
+###
+library("sfsmisc")
+model <- MASS::rlm(x ~ Tissue + Group_new + Age, data = data_aggregationPropensity)
+f.robftest(model, var = "TissueSN")
+
+	robust F-test (as if non-random weights)
+
+data:  from rlm(formula = x ~ Tissue + Group_new + Age, data = data_aggregationPropensity)
+F = 40.136, p-value = 2.186e-08
+alternative hypothesis: true TissueSN is not equal to 0
+
+f.robftest(model, var = "Age")
+
+
+	robust F-test (as if non-random weights)
+
+data:  from rlm(formula = x ~ Tissue + Group_new + Age, data = data_aggregationPropensity)
+F = 2.2143, p-value = 0.1414
+alternative hypothesis: true Age is not equal to 0
+
+
+data_aggregationPropensity  <- read.table("data_aggregationPropensity.txt", header=T, sep="\t")
+head(data_aggregationPropensity)
+### plotting boxplot
+
+
+library("ggplot2")
+pdf("data_aggregationPropensity1.pdf", width = 6, height = 6)
+ggplot(data_aggregationPropensity, aes(x = Tissue, y = x, fill = interaction(Tissue, Group_new))) +
+        geom_boxplot(alpha=0.7) +  
+        scale_y_continuous(name = "Aggregation propensity", limits = c(3, 7)) +
+        scale_x_discrete(name = "",  labels=c("", "")) +
+        theme(axis.line = element_line(colour = "black"), panel.background = element_blank(), plot.title = element_text(size = 25, family="Helvetica", face = "plain"), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+              text = element_text(size = 25, family="Helvetica", face = "plain"),
+              axis.title = element_text(size = 25, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.x=element_text(size = 25, colour = "black", family="Helvetica", face = "plain"),
+              axis.text.y=element_text(size = 25, colour = "black", family="Helvetica", face = "plain"),
+              legend.position = "none") + 
+        labs(fill = "Diagnosis")  + scale_fill_manual(values=c("#A5CEE3", "#B2DF89","#1F78B4","#34A02C"))
+        #scale_color_brewer(palette="Dark2")
+        #scale_fill_brewer(palette="Accent")
+dev.off()
+
+
+
+
+
+
+data_aggregationPropensity  <- read.table("data_aggregationPropensity.txt", header=T, sep="\t")
+head(data_aggregationPropensity)
+
+data_aggregationPropensity_Appendix <- subset(data_aggregationPropensity, data_aggregationPropensity$Tissue == "Appendix")
+###
+library("limma")
+data <- data_aggregationPropensity_Appendix$x
+design <- model.matrix(~ Group_new + Age, data = data_aggregationPropensity_Appendix)
+
+fit <- lmFit(data, design, method="robust")
+fit <- eBayes(fit)
+
+fit$p.value
+      (Intercept) Group_newPD        Age
+[1,] 1.590295e-15   0.3807253 0.08201232
+
+
+
+data_aggregationPropensity  <- read.table("data_aggregationPropensity.txt", header=T, sep="\t")
+head(data_aggregationPropensity)
+
+data_aggregationPropensity_SN <- subset(data_aggregationPropensity, data_aggregationPropensity$Tissue == "SN")
+###
+library("limma")
+data <- data_aggregationPropensity_SN$x
+design <- model.matrix(~ Group_new + Age, data = data_aggregationPropensity_SN)
+
+fit <- lmFit(data, design, method="robust")
+fit <- eBayes(fit)
+
+fit$p.value
+     (Intercept) Group_newPD      Age
+[1,]  0.04280236   0.3785449 0.986442
