@@ -1,0 +1,104 @@
+key <- read.table("key.txt", header=T, sep="\t", check.names=F)
+head(key)
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t", check.names=F)
+head(pfmap)
+pfmap_0Nox <- subset(pfmap, pfmap$Nox == 0 | pfmap$ID == "Total")
+
+data <- read.table("data.txt", header=T, sep="\t", check.names=F)
+head(data)
+data_0Nox <- data[, as.character(pfmap_0Nox$ID)]
+
+key$Group_new <- ifelse(key$Group == 0, c("Control"), c("PD"))
+
+data <- data.frame(key, data_0Nox)
+
+
+
+b <- matrix(data=NA, nrow=ncol(data[, 11:ncol(data)]), ncol=1)
+
+for(i in 1:ncol(data[, 11:ncol(data)]))
+{
+	b[i, 1] <- mean(is.na(data[, i+10])) <= 0.5
+}
+
+b_data <- data.frame(colnames((data[, 11:ncol(data)])), b)
+b_yes <- subset(b_data, b_data$b == "TRUE")
+
+data <- data[, c(colnames(data[, 1:10]), as.character(b_yes[, 1]))]
+
+
+data <- data.frame(data[, 1:10], t(scale(log10(t(data[, 11:ncol(data)])))))
+
+### average replicates
+PatientIDList <- unique(data$PatientID)
+
+data_new <- data.frame(data[1, 4], data[1, 7:10], data[1, 11:ncol(data)] )
+colnames(data_new) <- c("PatientID", colnames(data[1, 7:10]), colnames(data[1, 11:ncol(data)]))
+for(i in 1:length(PatientIDList))
+{
+	
+	sub <- subset(data, data$PatientID == as.character(PatientIDList[i]))
+	proAve <- colMeans(sub[, 11:ncol(sub)], na.rm=T)
+
+	tmp <- data.frame(sub[1, 4], sub[1, 7:10], t(proAve) )
+	colnames(tmp) <- c("PatientID", colnames(data[1, 7:10]), colnames(data[1, 11:ncol(data)]))
+	data_new <- rbind(data_new, tmp)
+}
+
+data_new <- data_new[2:nrow(data_new), ]
+
+data <- data_new
+write.table(data, "data_fit.txt", quote=F, sep="\t", row.names=F)
+
+
+
+
+data <- read.table("data_fit.txt", header=T, sep="\t")
+head(data)
+###
+library("limma")
+
+dat <- t(data[, 6:ncol(data)])
+
+design <- model.matrix(~ 1 + Tissue + Group_new + Age, data= data)
+fit <- lmFit(dat, design, method="robust", maxit=100)
+fit <- eBayes(fit)
+
+fit_table <- topTable(fit, coef=2, number=Inf, sort.by = "p")
+
+
+write.table(fit_table, "fit_table.txt", quote=F, sep="\t")
+
+
+
+
+
+
+pfmap <- read.table("pfmap copy.txt", header=T, sep="\t")
+head(pfmap)
+pfmap$name <- paste(pfmap$Ac, pfmap$Length, sep=" ")
+rownames(pfmap) <- pfmap$ID
+
+library("ggplot2")
+library(stringr)
+
+http://sape.inf.usi.ch/sites/default/files/ggplot2-geom_rect-example.png
+
+tissueDiff_results <- read.table("fit_table.txt", header=T, sep="\t")
+head(tissueDiff_results)
+
+pfmap_tissueDiff <- pfmap[rownames(tissueDiff_results), ]
+tissueDiff_results$name <- pfmap_tissueDiff$name
+
+#tissueDiff_results <- subset(tissueDiff_results, tissueDiff_results$adj.P.Val <= 0.05)
+tissueDiff_results$value <- sign(tissueDiff_results$logFC) * log10(tissueDiff_results$P.Value)
+tissueDiff_results_order <- tissueDiff_results[order(tissueDiff_results[, c("value")], decreasing = TRUE),]
+tissueDiff_results_order$sign <- as.character(sign(tissueDiff_results_order$logFC))
+tissueDiff_results_order$ID <- rownames(tissueDiff_results_order)
+tissueDiff_results_order$ID <- factor(tissueDiff_results_order$ID, levels=c(as.character(tissueDiff_results_order$ID)))
+tissueDiff_results_order <- subset(tissueDiff_results_order, tissueDiff_results_order$ID != "Total")
+
+write.table(tissueDiff_results_order, "tissueDiff_results_order.txt", quote=F, sep="\t", row.names=F)
+
+
