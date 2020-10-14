@@ -1,0 +1,260 @@
+
+data_All <- read.table("data_All.txt", header=T, sep="\t")
+head(data_All)
+
+data_All_Appendix <- subset(data_All, data_All$Tissue == "Appendix")
+data_All_Appendix_Control <- subset(data_All, data_All$Tissue == "Appendix" & data_All$Group_new == "Control")
+data_All_Appendix_PD <- subset(data_All, data_All$Tissue == "Appendix" & data_All$Group_new == "PD")
+
+data_All_SN_Control <- subset(data_All, data_All$Tissue == "SN" & data_All$Group_new == "Control")
+data_All_SN_PD <- subset(data_All, data_All$Tissue == "SN" & data_All$Group_new == "PD")
+
+
+### Appendix_Control; Appendix_PD
+cor <- data.frame(0.1)
+colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_Appendix_Control[, 6:ncol(data_All_Appendix_Control)])
+dat_2 <- t(data_All_Appendix_PD[, 6:ncol(data_All_Appendix_PD)])
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- data.frame(cor.test(dat_temp[, 1], dat_temp[, 2])$estimate)
+		colnames(cor_tmp) <- c("cor")
+		cor <- rbind(cor, cor_tmp)
+		}
+	}
+}
+cor <- cor[2:nrow(cor), ]
+Appendix_Control_Appendix_PD <- mean(cor)
+
+
+
+### SN_Control; SN_PD
+cor <- data.frame(0.1)
+colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_SN_Control[, 6:ncol(data_All_SN_Control)])
+dat_2 <- t(data_All_SN_PD[, 6:ncol(data_All_SN_PD)])
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- data.frame(cor.test(dat_temp[, 1], dat_temp[, 2])$estimate)
+		colnames(cor_tmp) <- c("cor")
+		cor <- rbind(cor, cor_tmp)
+		}
+	}
+}
+cor <- cor[2:nrow(cor), ]
+SN_Control_SN_PD <- mean(cor)
+
+
+
+### Appendix_Control; SN_Control
+cor <- data.frame(0.1)
+colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_Appendix_Control[, 6:ncol(data_All_Appendix_Control)])
+dat_2 <- t(data_All_SN_Control[, 6:ncol(data_All_SN_Control)])
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- data.frame(cor.test(dat_temp[, 1], dat_temp[, 2])$estimate)
+		colnames(cor_tmp) <- c("cor")
+		cor <- rbind(cor, cor_tmp)
+		}
+	}
+}
+cor <- cor[2:nrow(cor), ]
+Appendix_Control_SN_Control <- mean(cor)
+
+
+### Appendix_Control; SN_PD
+cor <- data.frame(0.1)
+colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_Appendix_Control[, 6:ncol(data_All_Appendix_Control)])
+dat_2 <- t(data_All_SN_PD[, 6:ncol(data_All_SN_PD)])
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- data.frame(cor.test(dat_temp[, 1], dat_temp[, 2])$estimate)
+		colnames(cor_tmp) <- c("cor")
+		cor <- rbind(cor, cor_tmp)
+		}
+	}
+}
+cor <- cor[2:nrow(cor), ]
+Appendix_Control_SN_PD <- mean(cor)
+
+
+### Appendix_PD; SN_Control
+cor <- data.frame(0.1)
+colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_Appendix_PD[, 6:ncol(data_All_Appendix_PD)])
+dat_2 <- t(data_All_SN_Control[, 6:ncol(data_All_SN_Control)])
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- data.frame(cor.test(dat_temp[, 1], dat_temp[, 2])$estimate)
+		colnames(cor_tmp) <- c("cor")
+		cor <- rbind(cor, cor_tmp)
+		}
+	}
+}
+cor <- cor[2:nrow(cor), ]
+Appendix_PD_SN_Control <- mean(cor)
+
+
+
+
+### Appendix_PD; SN_PD
+cor <- data.frame(0.1)
+colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_Appendix_PD[, 6:ncol(data_All_Appendix_PD)])
+dat_2 <- t(data_All_SN_PD[, 6:ncol(data_All_SN_PD)])
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- data.frame(cor.test(dat_temp[, 1], dat_temp[, 2])$estimate)
+		colnames(cor_tmp) <- c("cor")
+		cor <- rbind(cor, cor_tmp)
+		}
+	}
+}
+cor <- cor[2:nrow(cor), ]
+Appendix_PD_SN_PD <- mean(cor)
+
+
+
+
+
+
+
+
+
+
+
+### Appendix; SN_Control
+#cor <- data.frame(0.1)
+#colnames(cor) <- c("cor")
+
+
+data_All_Appendix$sampleName <- paste(data_All_Appendix$Group_new, data_All_Appendix$PatientID, sep="_")
+
+dat_1 <- t(data_All_Appendix[, 6:(ncol(data_All_Appendix)-1)])
+dat_2 <- t(data_All_SN_Control[, 6:(ncol(data_All_SN_Control))])
+
+cor <- matrix(data=NA, ncol=ncol(dat_1), nrow=ncol(dat_2))
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- cor.test(dat_temp[, 1], dat_temp[, 2])$estimate
+		cor[k, i] <- cor_tmp
+		}
+	}
+}
+
+Appendix_SN_Control_cor <- data.frame(cor)
+dim(Appendix_SN_Control_cor)
+colnames(Appendix_SN_Control_cor) <- data_All_Appendix$sampleName
+write.table(Appendix_SN_Control_cor, "Appendix_SN_Control_cor.txt", quote=F, sep="\t", row.names=F)
+
+
+Appendix_SN_Control <- mean(cor)
+
+
+
+
+### Appendix; SN_PD
+#cor <- data.frame(0.1)
+#colnames(cor) <- c("cor")
+
+dat_1 <- t(data_All_Appendix[, 6:(ncol(data_All_Appendix)-1)])
+dat_2 <- t(data_All_SN_PD[, 6:(ncol(data_All_SN_PD))])
+
+cor <- matrix(data=NA, ncol=ncol(dat_1), nrow=ncol(dat_2))
+
+for( i in 1:ncol(dat_1))
+{
+	for(k in 1: ncol(dat_2))
+	{
+		dat_temp <- cbind(dat_1[, i], dat_2[, k])
+		dat_temp  <- na.omit(dat_temp)
+		if(nrow(dat_temp) > 2)
+		{
+		cor_tmp <- cor.test(dat_temp[, 1], dat_temp[, 2])$estimate
+		cor[k, i] <- cor_tmp
+		}
+	}
+}
+
+#cor <- cor[2:nrow(cor), ]
+Appendix_SN_PD_cor <- data.frame(cor)
+colnames(Appendix_SN_PD_cor) <- data_All_Appendix$sampleName
+dim(Appendix_SN_PD_cor)
+
+write.table(Appendix_SN_PD_cor, "Appendix_SN_PD_cor.txt", quote=F, sep="\t", row.names=F)
+
+
+
+Appendix_SN_PD <- mean(cor)
+
+
+
+
+
+results <- rbind(Appendix_Control_Appendix_PD, SN_Control_SN_PD, Appendix_Control_SN_Control, Appendix_Control_SN_PD, Appendix_PD_SN_Control, Appendix_PD_SN_PD, Appendix_SN_Control, Appendix_SN_PD)
+
+colnames(results) <- c("cor")
+write.table(results, "results.txt", quote=F, sep="\t")
+
+
+
+
+
+
