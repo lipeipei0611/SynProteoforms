@@ -1,0 +1,46 @@
+
+key <- read.table("key.txt", header=T, sep="\t", check.names=F)
+head(key)
+
+pfmap <- read.table("pfmap.txt", header=T, sep="\t", check.names=F)
+head(pfmap)
+pfmap_0Nox <- subset(pfmap, pfmap$Nox == 0 | pfmap$ID == "Total")
+
+data <- read.table("data.txt", header=T, sep="\t", check.names=F)
+head(data)
+data_0Nox <- data[, as.character(pfmap_0Nox$ID)]
+
+key$Group_new <- ifelse(key$Group == 0, c("Control"), c("PD"))
+
+data <- data.frame(key, data_0Nox)
+
+
+### Appendix
+data_Appendix <- subset(data, data$Tissue == "Appendix")
+
+b <- matrix(data=NA, nrow=ncol(data_Appendix[, 11:ncol(data_Appendix)]), ncol=1)
+for(i in 1:ncol(data_Appendix[, 11:ncol(data_Appendix)]))
+{
+	b[i, 1] <- mean(is.na(data_Appendix[, i+10])) <= 0.5
+}
+
+b_data <- data.frame(colnames((data_Appendix[, 11:ncol(data_Appendix)])), b)
+b_yes <- subset(b_data, b_data$b == "TRUE")
+
+data_Appendix_final <- data_Appendix[, c("ID", "PatientID", "Age", "Tissue", "Group_new", as.character(b_yes[, 1]))]
+###
+library("limma")
+
+dat <- scale(log10(t(data_Appendix_final[, 6:19])))
+design <- model.matrix(~ 1 + Group_new + Age, data= data_Appendix_final)
+corfit <- duplicateCorrelation(dat, design, block = data_Appendix_final$PatientID)
+fit_Appendix <- lmFit(dat, design, block= data_Appendix_final$PatientID, cor=corfit$consensus.correlation, method="robust", maxit=100)
+fit_Appendix <- eBayes(fit_Appendix)
+
+fit_Appendix_table <- topTable(fit_Appendix, coef=3, number=Inf, sort.by = "p")
+write.table(fit_Appendix_table, "fit_Appendix_table_Age.txt", quote=F, sep="\t")
+write.table(data_Appendix_final, "data_Appendix_final.txt", quote=F, sep="\t", row.names=F)
+
+data_Appendix_final_scale <- data.frame(data_Appendix_final[, 1:5], t(dat))
+write.table(data_Appendix_final_scale, "data_Appendix_final_scale.txt", quote=F, sep="\t", row.names=F)
+
